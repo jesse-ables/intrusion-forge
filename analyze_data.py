@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from ignite.handlers.tensorboard_logger import TensorboardLogger
 from sklearn.ensemble import RandomForestClassifier
-from umap import UMAP
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -31,9 +30,10 @@ from src.common.utils import flush_timing, load_from_json, timed
 
 from src.data.io import load_df
 from src.data.complexity import compute_all_complexity_measures
+from src.ml.projection import stratified_subsample, umap_projection_2d
 from src.plot.array import (
     scatter_2d,
-    class_pair_tsne_scatter,
+    class_pair_scatter,
     confusion_matrix_to_plot,
     feature_importance_plot,
     roc_curve_plot,
@@ -325,66 +325,15 @@ def _plot_rf_evaluation(classifier_results: dict) -> dict[str, Plot]:
     }
 
 
-def _stratified_subsample(
-    y_cluster: np.ndarray,
-    noise_mask: np.ndarray,
-    max_samples: int,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """Pick up to *max_samples* indices, proportional to cluster size.
-
-    Non-noise samples are stratified by cluster (each cluster gets at least
-    one sample). Remaining budget is filled with noise samples. If no
-    subsampling is needed, returns all indices.
-    """
-    n = len(y_cluster)
-    if n <= max_samples:
-        return np.arange(n)
-
-    valid_idx = np.where(~noise_mask)[0]
-    valid_clusters = y_cluster[valid_idx]
-    unique_c, counts = np.unique(valid_clusters, return_counts=True)
-    budget_valid = min(max_samples, len(valid_idx))
-    per_cluster = np.maximum(
-        1, np.round(counts / counts.sum() * budget_valid).astype(int)
-    )
-
-    parts = []
-    for cid, take in zip(unique_c, per_cluster):
-        pool = valid_idx[valid_clusters == cid]
-        parts.append(rng.choice(pool, min(take, len(pool)), replace=False))
-
-    used = sum(len(p) for p in parts)
-    noise_idx = np.where(noise_mask)[0]
-    remaining = max(0, max_samples - used)
-    if remaining and len(noise_idx):
-        parts.append(
-            rng.choice(noise_idx, min(remaining, len(noise_idx)), replace=False)
-        )
-    return np.concatenate(parts)
-
-
-def _umap_2d(X: np.ndarray) -> np.ndarray:
-    """UMAP projection to 2D, with n_neighbors capped to sample count."""
-    n_neighbors = min(15, len(X) - 1)
-    return UMAP(
-        n_components=2,
-        n_neighbors=n_neighbors,
-        random_state=42,
-        n_jobs=-1,
-        verbose=False,
-    ).fit_transform(X)
-
-
-def _plot_class_cluster_tsne(
+def _plot_class_cluster_umap(
     X_num: np.ndarray,
     y_class: np.ndarray,
     y_cluster: np.ndarray,
     df_meta: dict,
     noise_cluster_ids: list[int],
-    tsne_max_samples: int,
+    umap_max_samples: int,
 ) -> dict[str, Plot]:
-    """t-SNE scatter per class, colored by cluster; title shows class name and cluster count."""
+    """UMAP scatter per class, colored by cluster; title shows class name and cluster count."""
     label_mapping: dict = df_meta.get("label_mapping", {})
     noise_ids = set(noise_cluster_ids)
     rng = np.random.default_rng(42)
@@ -398,17 +347,19 @@ def _plot_class_cluster_tsne(
             continue
 
         noise_c = (y_clust_c == -1) | np.isin(y_clust_c, list(noise_ids))
-        idx = _stratified_subsample(y_clust_c, noise_c, tsne_max_samples, rng)
+        idx = stratified_subsample(
+            y_clust_c, n_samples=umap_max_samples, noise_mask=noise_c, random_state=rng
+        )
         X_c, y_clust_c, noise_c = X_c[idx], y_clust_c[idx], noise_c[idx]
 
         class_name = str(label_mapping.get(str(int(class_id)), int(class_id)))
-        embedding = _umap_2d(X_c)
+        embedding = umap_projection_2d(X_c)
         result[f"analysis/cluster_tsne/class_{class_name}"] = scatter_2d(
             embedding,
             y_clust_c,
             noise_mask=noise_c,
-            x_label="t-SNE 1",
-            y_label="t-SNE 2",
+            x_label="D1",
+            y_label="D2",
         )
     return result
 
@@ -427,30 +378,20 @@ def _top_confused_pairs(cm: np.ndarray, k: int) -> list[tuple[int, int]]:
     ]
 
 
-def _plot_class_pairs_tsne(
+def _plot_class_pairs_umap(
     X_num: np.ndarray,
     y_class: np.ndarray,
     y_cluster: np.ndarray,
     cluster_summary: dict,
     df_meta: dict,
-    paths: "OutputPaths",
+    cm: np.ndarray,
     noise_cluster_ids: list[int],
     max_class_pairs: int,
-    pair_tsne_max_samples: int,
+    pair_umap_max_samples: int,
 ) -> dict[str, Plot]:
     """For top-K confused class pairs, draw each cluster as a patch:
     shape = class, fill = cluster ID, edge redness = failure rate.
     """
-    cm_path = paths.pickle / "analysis/confusion_matrices/test.pkl"
-    if not cm_path.exists():
-        logger.warning(
-            "Confusion matrix not found at %s; skipping class-pair t-SNE plots.",
-            cm_path,
-        )
-        return {}
-    with open(cm_path, "rb") as f:
-        cm: np.ndarray = pkl.load(f)
-
     label_mapping: dict = df_meta.get("label_mapping", {})
     noise_ids = set(noise_cluster_ids)
     failure_rate_by_cluster = {
@@ -469,7 +410,12 @@ def _plot_class_pairs_tsne(
             continue
 
         noise_p = (y_clust_p == -1) | np.isin(y_clust_p, list(noise_ids))
-        idx = _stratified_subsample(y_clust_p, noise_p, pair_tsne_max_samples, rng)
+        idx = stratified_subsample(
+            y_clust_p,
+            n_samples=pair_umap_max_samples,
+            noise_mask=noise_p,
+            random_state=rng,
+        )
         X_p, y_clust_p, y_cls_p, noise_p = (
             X_p[idx],
             y_clust_p[idx],
@@ -479,17 +425,15 @@ def _plot_class_pairs_tsne(
 
         name_a = str(label_mapping.get(str(int(cls_a)), int(cls_a)))
         name_b = str(label_mapping.get(str(int(cls_b)), int(cls_b)))
-        embedding = _umap_2d(X_p)
-        result[f"analysis/class_pairs/{name_a}__vs__{name_b}"] = (
-            class_pair_tsne_scatter(
-                embedding,
-                y_clust_p,
-                y_cls_p,
-                noise_p,
-                failure_rate_by_cluster,
-                class_names={int(cls_a): name_a, int(cls_b): name_b},
-                title=f"{name_a} vs {name_b}",
-            )
+        embedding = umap_projection_2d(X_p)
+        result[f"analysis/class_pairs/{name_a}__vs__{name_b}"] = class_pair_scatter(
+            embedding,
+            y_clust_p,
+            y_cls_p,
+            noise_p,
+            failure_rate_by_cluster,
+            class_names={int(cls_a): name_a, int(cls_b): name_b},
+            title=f"{name_a} vs {name_b}",
         )
     return result
 
@@ -501,8 +445,8 @@ def assemble_analysis_figures(
     y_cluster: np.ndarray,
     noise_cluster_ids: list[int],
     max_class_pairs: int = 10,
-    tsne_max_samples: int = 5000,
-    pair_tsne_max_samples: int = 5000,
+    umap_max_samples: int = 5000,
+    pair_umap_max_samples: int = 5000,
     cluster_summary: dict | None = None,
     df_meta: dict | None = None,
     classifier_results: dict | None = None,
@@ -537,28 +481,37 @@ def assemble_analysis_figures(
     figures.update(_plot_feature_by_outcome(summary_df, RELEVANT_GEOMETRIC_FEATURES))
     figures.update(_plot_rf_evaluation(classifier_results))
     figures.update(
-        _plot_class_cluster_tsne(
+        _plot_class_cluster_umap(
             X_num,
             y_class,
             y_cluster,
             df_meta,
             noise_cluster_ids,
-            tsne_max_samples,
+            umap_max_samples,
         )
     )
-    figures.update(
-        _plot_class_pairs_tsne(
-            X_num,
-            y_class,
-            y_cluster,
-            cluster_summary,
-            df_meta,
-            paths,
-            noise_cluster_ids,
-            max_class_pairs,
-            pair_tsne_max_samples,
+    cm_path = paths.pickle / "analysis/confusion_matrices/test.pkl"
+    if not cm_path.exists():
+        logger.warning(
+            "Confusion matrix not found at %s; skipping class-pair UMAP plots.",
+            cm_path,
         )
-    )
+    else:
+        with open(cm_path, "rb") as f:
+            cm: np.ndarray = pkl.load(f)
+        figures.update(
+            _plot_class_pairs_umap(
+                X_num,
+                y_class,
+                y_cluster,
+                cluster_summary,
+                df_meta,
+                cm,
+                noise_cluster_ids,
+                max_class_pairs,
+                pair_umap_max_samples,
+            )
+        )
     if analysis_bus is not None:
         analysis_bus.publish(LogBundle(figures=figures, step=step))
     return figures
@@ -645,8 +598,8 @@ def analyze(
     metric: str = "cosine",
     random_state: int = 0,
     max_class_pairs: int = 10,
-    tsne_max_samples: int = 5000,
-    pair_tsne_max_samples: int = 5000,
+    umap_max_samples: int = 5000,
+    pair_umap_max_samples: int = 5000,
 ) -> None:
     """Run data analysis pipeline."""
     logger.info("Starting analysis pipeline ...")
@@ -688,8 +641,8 @@ def analyze(
             y_cluster=y_cluster,
             noise_cluster_ids=noise_ids,
             max_class_pairs=max_class_pairs,
-            tsne_max_samples=tsne_max_samples,
-            pair_tsne_max_samples=pair_tsne_max_samples,
+            umap_max_samples=umap_max_samples,
+            pair_umap_max_samples=pair_umap_max_samples,
             cluster_summary=cluster_summary,
             df_meta=df_meta,
             classifier_results=classifier_results,
@@ -755,8 +708,8 @@ def main():
         metric=cfg.complexity.distance,
         random_state=cfg.run_id or 0,
         max_class_pairs=cfg.plots.max_class_pairs,
-        tsne_max_samples=cfg.plots.tsne_max_samples,
-        pair_tsne_max_samples=cfg.plots.pair_tsne_max_samples,
+        umap_max_samples=cfg.plots.tsne_max_samples,
+        pair_umap_max_samples=cfg.plots.pair_tsne_max_samples,
     )
     flush_timing(paths.json_logs / "timing.json")
 

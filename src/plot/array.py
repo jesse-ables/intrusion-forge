@@ -116,8 +116,16 @@ def scatter_2d(
     if X.ndim != 2 or X.shape[1] != 2:
         raise ValueError("`X` must have shape (n, 2).")
 
-    noise = np.asarray(noise_mask, dtype=bool) if noise_mask is not None else np.zeros(len(X), dtype=bool)
-    highlight = np.asarray(highlight_mask, dtype=bool) if highlight_mask is not None else np.zeros(len(X), dtype=bool)
+    noise = (
+        np.asarray(noise_mask, dtype=bool)
+        if noise_mask is not None
+        else np.zeros(len(X), dtype=bool)
+    )
+    highlight = (
+        np.asarray(highlight_mask, dtype=bool)
+        if highlight_mask is not None
+        else np.zeros(len(X), dtype=bool)
+    )
 
     unique_labels = sorted(int(l) for l in np.unique(labels[~noise]))
     cmap = _get_fill_cmap(max(len(unique_labels), 1))
@@ -127,9 +135,14 @@ def scatter_2d(
 
     if noise.any():
         ax.scatter(
-            X[noise, 0], X[noise, 1],
-            c="#aaaaaa", marker="x", s=marker_size * 0.6,
-            alpha=0.4, linewidths=0.8, zorder=1,
+            X[noise, 0],
+            X[noise, 1],
+            c="#aaaaaa",
+            marker="x",
+            s=marker_size * 0.6,
+            alpha=0.4,
+            linewidths=0.8,
+            zorder=1,
         )
 
     for lbl in unique_labels:
@@ -139,32 +152,65 @@ def scatter_2d(
         hot = base & highlight
         if normal.any():
             ax.scatter(
-                X[normal, 0], X[normal, 1], c=[color], s=marker_size,
-                alpha=0.8, edgecolors="#333333", linewidths=0.4, zorder=2,
+                X[normal, 0],
+                X[normal, 1],
+                c=[color],
+                s=marker_size,
+                alpha=0.8,
+                edgecolors="#333333",
+                linewidths=0.4,
+                zorder=2,
             )
         if hot.any():
             ax.scatter(
-                X[hot, 0], X[hot, 1], c=[color], s=marker_size,
-                alpha=0.9, edgecolors="#cc3333", linewidths=1.5, zorder=3,
+                X[hot, 0],
+                X[hot, 1],
+                c=[color],
+                s=marker_size,
+                alpha=0.9,
+                edgecolors="#cc3333",
+                linewidths=1.5,
+                zorder=3,
             )
 
     if names is not None:
         _name = lambda v: names.get(int(v), str(v))
         handles = [
-            plt.Line2D([], [], marker="o", linestyle="", markersize=9,
-                       markerfacecolor=color_map[lbl], markeredgecolor="#333333",
-                       markeredgewidth=0.8, label=_name(lbl))
+            plt.Line2D(
+                [],
+                [],
+                marker="o",
+                linestyle="",
+                markersize=9,
+                markerfacecolor=color_map[lbl],
+                markeredgecolor="#333333",
+                markeredgewidth=0.8,
+                label=_name(lbl),
+            )
             for lbl in unique_labels
         ]
         if highlight_mask is not None:
             handles.append(
-                plt.Line2D([], [], marker="o", linestyle="", markersize=9,
-                           markerfacecolor="#aaaaaa", markeredgecolor="#cc3333",
-                           markeredgewidth=1.5, label="misclassified")
+                plt.Line2D(
+                    [],
+                    [],
+                    marker="o",
+                    linestyle="",
+                    markersize=9,
+                    markerfacecolor="#aaaaaa",
+                    markeredgecolor="#cc3333",
+                    markeredgewidth=1.5,
+                    label="misclassified",
+                )
             )
         ncol = max(1, len(handles) // 12)
-        ax.legend(handles=handles, loc="upper left", fontsize=LEGEND_FONTSIZE,
-                  framealpha=LEGEND_FRAMEALPHA, ncol=ncol)
+        ax.legend(
+            handles=handles,
+            loc="upper left",
+            fontsize=LEGEND_FONTSIZE,
+            framealpha=LEGEND_FRAMEALPHA,
+            ncol=ncol,
+        )
 
     if title:
         ax.set_title(title, fontsize=TITLE_FONTSIZE, pad=TITLE_PAD)
@@ -460,8 +506,7 @@ def feature_importance_plot(
     return _fig_to_plot(fig)
 
 
-
-def class_pair_tsne_scatter(
+def class_pair_scatter(
     X_2d: np.ndarray,
     cluster_labels: np.ndarray,
     class_labels: np.ndarray,
@@ -497,8 +542,14 @@ def class_pair_tsne_scatter(
 
     if noise_mask.any():
         ax.scatter(
-            X_2d[noise_mask, 0], X_2d[noise_mask, 1],
-            c="#aaaaaa", marker="x", s=18, alpha=0.4, linewidths=0.8, zorder=1,
+            X_2d[noise_mask, 0],
+            X_2d[noise_mask, 1],
+            c="#aaaaaa",
+            marker="x",
+            s=18,
+            alpha=0.4,
+            linewidths=0.8,
+            zorder=1,
         )
 
     for cid in valid_ids:
@@ -512,27 +563,43 @@ def class_pair_tsne_scatter(
 
         cls = int(class_labels[mask][0])  # clusters are intra-class by construction
         fr = float(failure_rate_by_cluster.get(cid, 0.0) or 0.0)
-        ax.add_patch(Circle(
-            center, radius,
-            facecolor=class_color[cls],
-            edgecolor=edge_cmap(norm(fr)),
-            linewidth=1.0 + 2.0 * fr,
-            alpha=0.6,
-            zorder=2,
-        ))
+        ax.add_patch(
+            Circle(
+                center,
+                radius,
+                facecolor=class_color[cls],
+                edgecolor=edge_cmap(norm(fr)),
+                linewidth=1.0 + 2.0 * fr,
+                alpha=0.6,
+                zorder=2,
+            )
+        )
 
     ax.autoscale_view()
     ax.set_aspect("equal", adjustable="datalim")
 
     class_handles = [
-        plt.Line2D([], [], marker="o", linestyle="", markersize=11,
-                   markerfacecolor=class_color[cls], markeredgecolor="#333333",
-                   markeredgewidth=1.0, label=class_names.get(cls, str(cls)))
+        plt.Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+            markersize=11,
+            markerfacecolor=class_color[cls],
+            markeredgecolor="#333333",
+            markeredgewidth=1.0,
+            label=class_names.get(cls, str(cls)),
+        )
         for cls in unique_classes
     ]
-    leg = ax.legend(handles=class_handles, loc="upper left", title="Class",
-                    fontsize=LEGEND_FONTSIZE, title_fontsize=LEGEND_FONTSIZE,
-                    framealpha=LEGEND_FRAMEALPHA)
+    leg = ax.legend(
+        handles=class_handles,
+        loc="upper left",
+        title="Class",
+        fontsize=LEGEND_FONTSIZE,
+        title_fontsize=LEGEND_FONTSIZE,
+        framealpha=LEGEND_FRAMEALPHA,
+    )
     ax.add_artist(leg)
 
     sm = plt.cm.ScalarMappable(cmap=edge_cmap, norm=norm)
@@ -543,8 +610,8 @@ def class_pair_tsne_scatter(
 
     if title:
         ax.set_title(title, fontsize=TITLE_FONTSIZE, pad=TITLE_PAD)
-    ax.set_xlabel("t-SNE 1", fontsize=LABEL_FONTSIZE, labelpad=LABEL_PAD)
-    ax.set_ylabel("t-SNE 2", fontsize=LABEL_FONTSIZE, labelpad=LABEL_PAD)
+    ax.set_xlabel("D1", fontsize=LABEL_FONTSIZE, labelpad=LABEL_PAD)
+    ax.set_ylabel("D2", fontsize=LABEL_FONTSIZE, labelpad=LABEL_PAD)
     ax.tick_params(labelsize=TICK_LABELSIZE)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)

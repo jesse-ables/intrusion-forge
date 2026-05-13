@@ -34,7 +34,7 @@ from src.common.utils import flush_timing, load_from_json, timed
 from src.data.io import load_listed_dfs
 from src.data.preprocessing import subsample_df
 
-from src.ml.projection import create_subsample_mask, tsne_projection
+from src.ml.projection import stratified_subsample, tsne_projection
 
 from src.plot.array import confusion_matrix_to_plot, scatter_2d
 from src.plot.base import Plot
@@ -297,14 +297,14 @@ def _build_figures(
 
     names = {int(c): label_mapping.get(str(int(c)), str(c)) for c in classes}
     correct = y_pred == y_true
-    vis_mask = create_subsample_mask(y_true, n_samples=2000, stratify=False)
+    vis_idx = stratified_subsample(y_true, n_samples=2000, stratify=False)
     for tag, data in (("raw/classes", X), ("latent/classes", z)):
         if data is None:
             continue
         figures[f"figure/testing/{tag}"] = scatter_2d(
-            tsne_projection(data[vis_mask], n_components=2),
-            y_true[vis_mask],
-            highlight_mask=~correct[vis_mask],
+            tsne_projection(data[vis_idx], n_components=2),
+            y_true[vis_idx],
+            highlight_mask=~correct[vis_idx],
             names=names,
             x_label="t-SNE 1",
             y_label="t-SNE 2",

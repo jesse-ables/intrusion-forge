@@ -15,8 +15,8 @@ complexity:
 
 clustering:
   distance: cosine                # euclidean | cosine — L2-normalises X_num before HDBSCAN fit when cosine
-  min_cluster_sizes: [10, 20, 30, 50]
-  min_samples_list: [5, 10, 30]
+  min_cluster_sizes: [10, 30, 50, 100, 150]
+  min_samples_list: [5, 10, 30, 50]
   cluster_selection_method: leaf     # leaf = fine-grained cohesive clusters; eom = larger merged clusters
   max_cluster_size: null             # optional hard-cap on cluster size (null = disabled)
   max_fit_samples: 10000

@@ -13,3 +13,4 @@ hdbscan
 pytorch-ignite
 tqdm
 tensorboard
+umap-learn

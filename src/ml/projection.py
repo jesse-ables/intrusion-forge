@@ -1,46 +1,80 @@
 import numpy as np
 from sklearn.manifold import TSNE
+from umap import UMAP
 
 
-def create_subsample_mask(
+def stratified_subsample(
     labels: np.ndarray,
     n_samples: int | None = None,
     stratify: bool = True,
-    random_state: int | None = None,
+    noise_mask: np.ndarray | None = None,
+    random_state: int | np.random.Generator | None = None,
 ) -> np.ndarray:
-    """Generate a boolean mask for subsampling data.
+    """Sample up to n_samples indices from labels, stratified by group.
 
-    If n_samples is None or >= dataset size, all samples are kept.
-    If stratify=True, samples proportionally to class distribution.
-    If stratify=False, samples an equal number of samples per class.
+    Returns an indices array. If n_samples is None or >= len(labels), returns all indices.
+    When stratify=True, samples proportionally to group size (at least one per group).
+    When stratify=False, samples equally per group, capped at the smallest group.
+    If noise_mask is provided, noise points fill the remaining budget after stratified sampling.
     """
-    if n_samples is None or n_samples >= len(labels):
-        return np.ones(len(labels), dtype=bool)
+    n = len(labels)
+    if n_samples is None or n_samples >= n:
+        return np.arange(n)
 
-    rng = np.random.default_rng(random_state)
-    mask = np.zeros(len(labels), dtype=bool)
-    unique_labels = np.unique(labels)
+    rng = (
+        random_state
+        if isinstance(random_state, np.random.Generator)
+        else np.random.default_rng(random_state)
+    )
+    noise = (
+        np.asarray(noise_mask, dtype=bool)
+        if noise_mask is not None
+        else np.zeros(n, dtype=bool)
+    )
+    valid_idx = np.where(~noise)[0]
+    valid_labels = labels[valid_idx]
+    unique_groups = np.unique(valid_labels)
+    counts = np.array([np.sum(valid_labels == g) for g in unique_groups])
+    budget_valid = min(n_samples, len(valid_idx))
 
     if stratify:
-        label_counts = np.array([np.sum(labels == l) for l in unique_labels])
-        samples_per_class = np.round(label_counts / len(labels) * n_samples).astype(int)
-        samples_per_class[np.argmax(samples_per_class)] += (
-            n_samples - samples_per_class.sum()
+        per_group = np.maximum(
+            1, np.round(counts / counts.sum() * budget_valid).astype(int)
         )
     else:
-        label_counts = np.array([np.sum(labels == l) for l in unique_labels])
-        min_class_count = label_counts.min()
-        per_class = min(n_samples // len(unique_labels), min_class_count)
-        samples_per_class = [per_class] * len(unique_labels)
-
-    for label, k in zip(unique_labels, samples_per_class):
-        class_indices = np.where(labels == label)[0]
-        selected = rng.choice(
-            class_indices, size=min(k, len(class_indices)), replace=False
+        min_count = int(counts.min())
+        per_group = np.full(
+            len(unique_groups),
+            min(budget_valid // len(unique_groups), min_count),
+            dtype=int,
         )
-        mask[selected] = True
 
-    return mask
+    parts = []
+    for g, take in zip(unique_groups, per_group):
+        pool = valid_idx[valid_labels == g]
+        parts.append(rng.choice(pool, min(take, len(pool)), replace=False))
+
+    if noise_mask is not None:
+        used = sum(len(p) for p in parts)
+        noise_idx = np.where(noise)[0]
+        remaining = max(0, n_samples - used)
+        if remaining and len(noise_idx):
+            parts.append(
+                rng.choice(noise_idx, min(remaining, len(noise_idx)), replace=False)
+            )
+
+    return np.concatenate(parts) if parts else np.array([], dtype=int)
+
+
+def umap_projection_2d(X: np.ndarray) -> np.ndarray:
+    """Project data to 2D with UMAP, capping n_neighbors to sample count."""
+    n_neighbors = min(15, len(X) - 1)
+    return UMAP(
+        n_components=2,
+        n_neighbors=n_neighbors,
+        n_jobs=-1,
+        verbose=False,
+    ).fit_transform(X)
 
 
 def tsne_projection(
