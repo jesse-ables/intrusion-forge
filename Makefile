@@ -14,10 +14,23 @@ EXPERIMENT ?= supervised
 DATA       ?= cic_2018_v2
 NAME       ?= exp
 SEED       ?= 42
+MODEL      ?= tabular_classifier
+DISTANCE   ?= cosine
 
-DATASETS := nb15_v2 bot_iot_v2 cic_2018_v2 ton_iot_v2
+DATASET_MODELS := \
+    nb15_v2:tabular_classifier \
+    bot_iot_v2:tabular_classifier \
+    cic_2018_v2:tabular_classifier \
+    ton_iot_v2:tabular_classifier \
+    bank_marketing:tabular_classifier \
+    covertype:numerical_classifier \
+    letter_recognition:numerical_classifier \
+    statlog_landsat_satellite:numerical_classifier \
+    thyroid_disease:numerical_classifier
 
-HYDRA := experiment=$(EXPERIMENT) data=$(DATA) name=$(NAME) seed=$(SEED)
+HYDRA := experiment=$(EXPERIMENT) data=$(DATA) name=$(NAME) seed=$(SEED) \
+         model=$(MODEL) \
+         complexity.distance=$(DISTANCE) clustering.distance=$(DISTANCE)
 TB_LOGDIR  := resources/experiments/$(NAME)/$(DATA)_$(SEED)/tb
 
 .PHONY: prepare classify analyze run all generate tensorboard help
@@ -37,15 +50,17 @@ analyze:
 ## run:                Run all three steps for a single dataset        (DATA, NAME, SEED)
 run: prepare classify analyze
 
-## all:                Run all three steps for every dataset in DATASETS (NAME, SEED)
+## all:                Run all three steps for every dataset in DATASET_MODELS (NAME, SEED, DISTANCE)
 all:
-	@for dataset in $(DATASETS); do \
+	@for entry in $(DATASET_MODELS); do \
+		dataset=$${entry%%:*}; model=$${entry##*:}; \
 		echo ""; \
 		echo "══════════════════════════════════════════════"; \
-		echo " Dataset: $$dataset  |  name=$(NAME)  seed=$(SEED)"; \
+		echo " Dataset: $$dataset  |  model=$$model  |  name=$(NAME)  seed=$(SEED)"; \
 		echo "══════════════════════════════════════════════"; \
 		$(MAKE) --no-print-directory run \
-			DATA=$$dataset NAME=$(NAME) SEED=$(SEED) EXPERIMENT=$(EXPERIMENT); \
+			DATA=$$dataset MODEL=$$model NAME=$(NAME) SEED=$(SEED) EXPERIMENT=$(EXPERIMENT) \
+			DISTANCE=$(DISTANCE); \
 	done
 	@echo ""
 	@echo "All datasets processed."
@@ -60,11 +75,11 @@ tensorboard:
 
 ## help:               Show this help message
 help:
-	@echo "Usage: make <target> [DATA=<dataset>] [NAME=<name>] [SEED=<n>] [EXPERIMENT=<exp>]"
+	@echo "Usage: make <target> [DATA=<dataset>] [NAME=<name>] [SEED=<n>] [EXPERIMENT=<exp>] [MODEL=<model>] [DISTANCE=<dist>]"
 	@echo ""
 	@echo "Targets:"
 	@grep -E '^## ' Makefile | sed 's/## /  /'
 	@echo ""
-	@echo "Defaults:  DATA=$(DATA)  NAME=$(NAME)  SEED=$(SEED)  EXPERIMENT=$(EXPERIMENT)"
-	@echo "Datasets:  $(DATASETS)"
+	@echo "Defaults:  DATA=$(DATA)  NAME=$(NAME)  SEED=$(SEED)  EXPERIMENT=$(EXPERIMENT)  MODEL=$(MODEL)  DISTANCE=$(DISTANCE)"
+	@echo "Datasets:  $(DATASET_MODELS)"
 	@echo "TensorBoard logdir:  $(TB_LOGDIR)"

@@ -402,7 +402,7 @@ def violin_box_plot(
     for side, (cat, color) in enumerate(zip(unique_cats, palette_colors)):
         mask = categories == cat
         vals = values[mask]
-        if len(vals) < 2:
+        if len(vals) < 2 or np.unique(vals).size < 2:
             continue
 
         parts = ax.violinplot(
@@ -415,6 +415,8 @@ def violin_box_plot(
         body.set_linewidth(1.0)
 
         # clip to left (side=0) or right (side=1) half
+        if not body.get_paths():
+            continue
         verts = body.get_paths()[0].vertices
         if side == 0:
             verts[:, 0] = np.minimum(verts[:, 0], 0.0)

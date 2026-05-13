@@ -132,9 +132,14 @@ def _run_outer_fold(
     y_pred = best.predict(X_test)
     y_proba = best.predict_proba(X_test)[:, 1]
 
+    try:
+        auc = roc_auc_score(y_test, y_proba)
+    except ValueError:
+        auc = float("nan")
+
     return {
         "f1": f1_score(y_test, y_pred),
-        "auc": roc_auc_score(y_test, y_proba),
+        "auc": auc,
         "importances": best.feature_importances_,
         "y_pred": y_pred.tolist(),
         "y_proba": y_proba.tolist(),
@@ -222,8 +227,8 @@ def fit_failure_classifier(
         "f1_score": float(np.mean(fold_f1s)),
         "f1_score_std": float(np.std(fold_f1s)),
         "f1_scores_per_fold": fold_f1s,
-        "roc_auc": float(np.mean(fold_aucs)),
-        "roc_auc_std": float(np.std(fold_aucs)),
+        "roc_auc": float(np.nanmean(fold_aucs)),
+        "roc_auc_std": float(np.nanstd(fold_aucs)),
         "roc_auc_per_fold": fold_aucs,
         "roc_curve_data": {"fpr": fpr.tolist(), "tpr": tpr.tolist()},
         "confusion_matrix": confusion_matrix(oof_y_true_arr, oof_y_pred_arr).tolist(),
