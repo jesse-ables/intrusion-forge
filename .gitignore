@@ -1,4 +1,6 @@
 # Custom skipped files
+CLAUDE.md
+.vscode/
 .claude/
 plans/
 .github/

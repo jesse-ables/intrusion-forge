@@ -69,6 +69,10 @@ all:
 generate:
 	$(PYTHON) generate_synthetic.py $(if $(ROWS),--rows $(ROWS),)
 
+## dashboard:          Open the experiment dashboard in browser
+dashboard:
+	venv/bin/streamlit run dashboard.py
+
 ## tensorboard:        Open TensorBoard for the current experiment     (DATA, NAME, SEED)
 tensorboard:
 	venv/bin/tensorboard --logdir $(TB_LOGDIR)
