@@ -1,12 +1,9 @@
-import io
 import logging
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-import matplotlib.image
-import numpy as np
 from rich.logging import RichHandler
 
 from src.plot.base import Plot
@@ -66,42 +63,35 @@ def setup_logger(
 
 @dataclass
 class LogBundle:
-    """Structured payload published alongside a function's return value.
+    """Structured payload routed to subscribers.
 
-    Each field is a dict keyed by relative path (without extension) under
-    the relevant subscriber's base directory or TensorBoard tag.
-    Build from a prefixed-key dict via LogBundle.from_dict.
+    Each field is a dict keyed by relative path (without extension), resolved
+    against the corresponding subscriber's base directory.
+    Build from a prefixed-key dict via `LogBundle.from_dict`.
     """
 
-    scalars: dict[str, float] = field(default_factory=dict)
     figures: dict[str, Plot] = field(default_factory=dict)
     json: dict[str, Any] = field(default_factory=dict)
     pickle: dict[str, Any] = field(default_factory=dict)
-    step: int | None = None
 
     @classmethod
-    def from_dict(cls, d: dict, step: int | None = None) -> "LogBundle":
+    def from_dict(cls, d: dict) -> "LogBundle":
         """Build a LogBundle from a flat dict with type-prefixed keys.
 
-        Recognised prefixes: 'scalar/', 'figure/', 'json/', 'pickle/'.
-        Keys without a recognised prefix are silently ignored.
+        Recognised prefixes: 'figure/', 'json/', 'pickle/'. Keys without a
+        recognised prefix are silently ignored.
         """
-        scalars: dict[str, float] = {}
         figures: dict[str, Plot] = {}
         json_: dict[str, Any] = {}
         pickle_: dict[str, Any] = {}
         for key, value in d.items():
-            if key.startswith("scalar/"):
-                scalars[key[len("scalar/") :]] = value
-            elif key.startswith("figure/"):
+            if key.startswith("figure/"):
                 figures[key[len("figure/") :]] = value
             elif key.startswith("json/"):
                 json_[key[len("json/") :]] = value
             elif key.startswith("pickle/"):
                 pickle_[key[len("pickle/") :]] = value
-        return cls(
-            scalars=scalars, figures=figures, json=json_, pickle=pickle_, step=step
-        )
+        return cls(figures=figures, json=json_, pickle=pickle_)
 
 
 class LogDispatcher:
@@ -124,24 +114,17 @@ class LogDispatcher:
             sub.on_log(bundle)
 
 
-def _png_to_chw(data: bytes) -> np.ndarray:
-    """Decode PNG bytes to a CHW float array for TensorBoard add_image."""
-    hwc = matplotlib.image.imread(io.BytesIO(data))
-    return np.transpose(hwc, (2, 0, 1))
+class FilesystemFigureSubscriber:
+    """Writes figures from LogBundle as image files under base_path / {name}.{format}."""
 
-
-class TensorBoardSubscriber:
-    """Writes scalars and figures from LogBundle to a TensorBoard writer."""
-
-    def __init__(self, writer) -> None:
-        self._writer = writer
+    def __init__(self, base_path: Path) -> None:
+        self._base_path = Path(base_path)
 
     def on_log(self, bundle: LogBundle) -> None:
-        """Write scalars via add_scalar; write figures via add_image."""
-        for tag, value in bundle.scalars.items():
-            self._writer.add_scalar(tag, value, bundle.step)
-        for tag, plot in bundle.figures.items():
-            self._writer.add_image(tag, _png_to_chw(plot.data), bundle.step)
+        for name, plot in bundle.figures.items():
+            out = self._base_path / f"{name}.{plot.format}"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(plot.data)
 
 
 class JSONSubscriber:

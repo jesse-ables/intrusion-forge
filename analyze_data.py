@@ -4,7 +4,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from ignite.handlers.tensorboard_logger import TensorboardLogger
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     classification_report,
@@ -18,10 +17,9 @@ from tqdm import tqdm
 
 from src.common.config import load_config, save_config
 from src.common.log import (
-    LogDispatcher,
     JSONSubscriber,
     LogBundle,
-    TensorBoardSubscriber,
+    LogDispatcher,
     setup_logger,
 )
 from src.common.paths import OutputPaths
@@ -284,36 +282,31 @@ def analyze(
     logger.info("Starting analysis pipeline ...")
     noise_ids = noise_cluster_ids or []
     analysis_bus = LogDispatcher()
-    tb_logger = TensorboardLogger(log_dir=paths.tb_logs / "analysis")
-    analysis_bus.subscribe(TensorBoardSubscriber(tb_logger.writer))
     analysis_bus.subscribe(JSONSubscriber(paths.json_logs))
 
-    try:
-        cluster_summary, _ = run_complexity(
-            paths,
-            X_num,
-            X_cat,
-            y_class,
-            y_cluster,
-            centroids,
-            noise_ids,
-            k,
-            top_k_clusters,
-            min_subsample_per_cluster,
-            max_complexity_samples,
-            metric,
-            random_state,
-            analysis_bus,
-        )
-        fit_failure_classifier(
-            paths,
-            RF_PARAM_GRID,
-            cluster_stats=cluster_summary,
-            failure_threshold=failure_threshold,
-            analysis_bus=analysis_bus,
-        )
-    finally:
-        tb_logger.close()
+    cluster_summary, _ = run_complexity(
+        paths,
+        X_num,
+        X_cat,
+        y_class,
+        y_cluster,
+        centroids,
+        noise_ids,
+        k,
+        top_k_clusters,
+        min_subsample_per_cluster,
+        max_complexity_samples,
+        metric,
+        random_state,
+        analysis_bus,
+    )
+    fit_failure_classifier(
+        paths,
+        RF_PARAM_GRID,
+        cluster_stats=cluster_summary,
+        failure_threshold=failure_threshold,
+        analysis_bus=analysis_bus,
+    )
 
 
 def main():
@@ -326,11 +319,11 @@ def main():
     paths = OutputPaths(
         processed_data=Path(cfg.path.processed_data),
         data_logs=Path(cfg.path.data_logs),
-        tb_logs=Path(cfg.path.tb_logs),
         configs=Path(cfg.path.configs),
         json_logs=Path(cfg.path.json_logs),
         pickle=Path(cfg.path.pickle),
         models=Path(cfg.path.models),
+        figures=Path(cfg.path.figures),
     )
     save_config(cfg, paths.configs / "config_composed.json")
 
@@ -370,7 +363,7 @@ def main():
         max_complexity_samples=cfg.complexity.max_complexity_samples,
         noise_cluster_ids=noise_cluster_ids,
         metric=cfg.complexity.distance,
-        random_state=cfg.run_id or 0,
+        random_state=cfg.seed,
     )
     flush_timing(paths.json_logs / "timing.json")
 

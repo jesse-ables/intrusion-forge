@@ -1,4 +1,5 @@
 # @package classifier
+kind: ml
 name: random_forest
 params:
   n_estimators: 200

@@ -6,15 +6,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from ignite.handlers.tensorboard_logger import TensorboardLogger
-
 from src.common.config import load_config, save_config
 from src.common.log import (
-    setup_logger,
-    LogDispatcher,
-    LogBundle,
     JSONSubscriber,
-    TensorBoardSubscriber,
+    LogBundle,
+    LogDispatcher,
+    setup_logger,
 )
 from src.common.utils import flush_timing, load_from_json, timed
 
@@ -232,12 +229,9 @@ def prepare(cfg):
     raw_data_path = Path(cfg.path.raw_data)
     processed_data_path = Path(cfg.path.processed_data)
     data_logs_path = Path(cfg.path.data_logs)
-    tb_logs_path = Path(cfg.path.tb_logs)
 
-    tb_logger = TensorboardLogger(log_dir=tb_logs_path / "prepare")
     dispatcher = LogDispatcher()
     dispatcher.subscribe(JSONSubscriber(data_logs_path))
-    dispatcher.subscribe(TensorBoardSubscriber(tb_logger.writer))
 
     logger.info("Loading and preprocessing data...")
     df = load_df(str(raw_data_path))
@@ -283,7 +277,7 @@ def prepare(cfg):
         all_classes,
         param_grid=param_grid,
         max_fit_samples=cfg.clustering.max_fit_samples,
-        random_state=cfg.run_id or 0,
+        random_state=cfg.seed,
         cluster_selection_method=cfg.clustering.cluster_selection_method,
         max_cluster_size=cfg.clustering.max_cluster_size,
         metric=cfg.clustering.distance,
@@ -341,8 +335,6 @@ def prepare(cfg):
         LogBundle.from_dict({"json/data/clusters_meta": clusters_metadata})
     )
     logger.info("Cluster metadata saved.")
-
-    tb_logger.close()
 
     return train_df, val_df, test_df, metadata
 

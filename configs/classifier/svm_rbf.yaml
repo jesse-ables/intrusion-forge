@@ -1,4 +1,5 @@
 # @package classifier
+kind: ml
 name: svm_rbf
 params:
   kernel: rbf

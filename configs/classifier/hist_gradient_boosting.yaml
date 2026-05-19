@@ -1,4 +1,5 @@
 # @package classifier
+kind: ml
 name: hist_gradient_boosting
 params:
   max_iter: 200

@@ -1,5 +1,6 @@
+# @package classifier
+kind: dl
 name: numerical_classifier
-
 params:
   in_features: ${data.num_numerical}
   hidden_dims: [128, 64, 32, 16]

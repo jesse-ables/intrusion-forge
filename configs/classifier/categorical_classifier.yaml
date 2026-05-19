@@ -1,5 +1,6 @@
+# @package classifier
+kind: dl
 name: categorical_classifier
-
 params:
   num_features: ${data.num_categorical}
   max_emb_dim: 384

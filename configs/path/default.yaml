@@ -6,10 +6,10 @@ raw_data: resources/raw_data/${data.dir}/${data.file_name}.csv
 # Shared across classifiers (dataset-level)
 processed_data: ${path.out_base_path}/processed_data
 data_logs:      ${path.out_base_path}/data_logs
-tb_logs:        ${path.out_base_path}/tb
 
 # Per-classifier (resolved against ${classifier.name})
 models:    ${path.out_base_path}/${classifier.name}/models
 json_logs: ${path.out_base_path}/${classifier.name}/json_logs
 pickle:    ${path.out_base_path}/${classifier.name}/pickle
 configs:   ${path.out_base_path}/${classifier.name}/configs
+figures:   ${path.out_base_path}/${classifier.name}/figures

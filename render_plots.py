@@ -4,15 +4,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from ignite.handlers.tensorboard_logger import TensorboardLogger
 from sklearn.metrics import pairwise_distances
 
 from src.common.config import load_config, save_config
 from src.common.log import (
+    FilesystemFigureSubscriber,
     JSONSubscriber,
     LogBundle,
     LogDispatcher,
-    TensorBoardSubscriber,
     setup_logger,
 )
 from src.common.paths import OutputPaths
@@ -407,7 +406,6 @@ def assemble_analysis_figures(
     classifier_results: dict,
     metric: str = "cosine",
     analysis_bus: LogDispatcher | None = None,
-    step: int = 0,
 ) -> dict[str, Plot]:
     """Build all analysis figures and publish to log bus."""
     logger.info("Building summary visualizations ...")
@@ -446,7 +444,7 @@ def assemble_analysis_figures(
         )
     )
     if analysis_bus is not None:
-        analysis_bus.publish(LogBundle(figures=figures, step=step))
+        analysis_bus.publish(LogBundle(figures=figures))
     return figures
 
 
@@ -460,11 +458,11 @@ def main():
     paths = OutputPaths(
         processed_data=Path(cfg.path.processed_data),
         data_logs=Path(cfg.path.data_logs),
-        tb_logs=Path(cfg.path.tb_logs),
         configs=Path(cfg.path.configs),
         json_logs=Path(cfg.path.json_logs),
         pickle=Path(cfg.path.pickle),
         models=Path(cfg.path.models),
+        figures=Path(cfg.path.figures),
     )
     save_config(cfg, paths.configs / "config_composed_render.json")
 
@@ -478,22 +476,17 @@ def main():
     )
 
     analysis_bus = LogDispatcher()
-    tb_logger = TensorboardLogger(log_dir=paths.tb_logs / "analysis")
-    analysis_bus.subscribe(TensorBoardSubscriber(tb_logger.writer))
     analysis_bus.subscribe(JSONSubscriber(paths.json_logs))
+    analysis_bus.subscribe(FilesystemFigureSubscriber(paths.figures))
 
-    try:
-        assemble_analysis_figures(
-            cluster_summary=cluster_summary,
-            centroids=centroids,
-            df_meta=df_meta,
-            classifier_results=classifier_results,
-            metric=cfg.complexity.distance,
-            analysis_bus=analysis_bus,
-            step=cfg.run_id or 0,
-        )
-    finally:
-        tb_logger.close()
+    assemble_analysis_figures(
+        cluster_summary=cluster_summary,
+        centroids=centroids,
+        df_meta=df_meta,
+        classifier_results=classifier_results,
+        metric=cfg.complexity.distance,
+        analysis_bus=analysis_bus,
+    )
     flush_timing(paths.json_logs / "timing.json")
 
 

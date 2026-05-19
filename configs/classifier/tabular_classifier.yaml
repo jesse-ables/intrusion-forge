@@ -1,5 +1,6 @@
+# @package classifier
+kind: dl
 name: tabular_classifier
-
 params:
   num_numerical_features: ${data.num_numerical}
   num_categorical_features: ${data.num_categorical}

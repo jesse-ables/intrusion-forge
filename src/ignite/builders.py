@@ -2,18 +2,9 @@ from collections.abc import Callable
 from pathlib import Path
 import shutil
 
-import torch.nn as nn
-from torch.optim import Optimizer
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping, ModelCheckpoint
 from ignite.metrics import Metric
-from ignite.handlers.tensorboard_logger import (
-    TensorboardLogger,
-    global_step_from_engine,
-    WeightsHistHandler,
-    GradsHistHandler,
-    OptimizerParamsHandler,
-)
 
 
 class EngineBuilder:
@@ -23,6 +14,7 @@ class EngineBuilder:
         >>> engine = (EngineBuilder(train_step)
         ...     .with_state(model=model, optimizer=optimizer, device=device)
         ...     .with_metric("loss", Average(output_transform=lambda x: x["loss"]))
+        ...     .with_history(output_transform=lambda out: {"loss": out["loss"]})
         ...     .build())
     """
 
@@ -31,6 +23,7 @@ class EngineBuilder:
         self._state_kwargs: dict[str, object] = {}
         self._metrics: dict[str, Metric] = {}
         self._event_handlers: list = []
+        self._history: dict[str, list[float]] = {}
 
     def with_state(self, **kwargs) -> "EngineBuilder":
         """Add attributes to engine state."""
@@ -94,74 +87,27 @@ class EngineBuilder:
         )
         return self.with_handler(Events.COMPLETED, handler, objects_to_save)
 
-    def with_tensorboard(
+    def with_history(
         self,
-        tb_logger: TensorboardLogger,
-        event: Events = Events.ITERATION_COMPLETED,
-        tag: str | None = None,
-        output_transform: Callable | None = None,
-        metric_names: list | None = None,
-        trainer: Engine | None = None,
-    ) -> "EngineBuilder":
-        """Add TensorBoard output logging."""
-        kwargs: dict = {"event_name": event}
-        if tag is not None:
-            kwargs["tag"] = tag
-        if output_transform is not None:
-            kwargs["output_transform"] = output_transform
-        if metric_names is not None:
-            kwargs["metric_names"] = metric_names
-        if trainer is not None:
-            kwargs["global_step_transform"] = global_step_from_engine(trainer)
-        return self.with_handler(
-            Events.STARTED,
-            lambda engine: tb_logger.attach_output_handler(engine, **kwargs),
-        )
-
-    def with_weights_logging(
-        self,
-        tb_logger: TensorboardLogger,
-        model: nn.Module,
-        event: Events = Events.EPOCH_COMPLETED,
-    ) -> "EngineBuilder":
-        """Add weight histogram logging to TensorBoard."""
-        return self.with_handler(
-            Events.STARTED,
-            lambda engine: tb_logger.attach(
-                engine, log_handler=WeightsHistHandler(model), event_name=event
-            ),
-        )
-
-    def with_gradients_logging(
-        self,
-        tb_logger: TensorboardLogger,
-        model: nn.Module,
-        event: Events = Events.EPOCH_COMPLETED,
-    ) -> "EngineBuilder":
-        """Add gradient histogram logging to TensorBoard."""
-        return self.with_handler(
-            Events.STARTED,
-            lambda engine: tb_logger.attach(
-                engine, log_handler=GradsHistHandler(model), event_name=event
-            ),
-        )
-
-    def with_optimizer_logging(
-        self,
-        tb_logger: TensorboardLogger,
-        optimizer: Optimizer,
-        param_name: str = "lr",
+        output_transform: Callable[[object], dict[str, float]],
         event: Events = Events.ITERATION_COMPLETED,
     ) -> "EngineBuilder":
-        """Add optimizer parameter logging to TensorBoard."""
-        return self.with_handler(
-            Events.STARTED,
-            lambda engine: tb_logger.attach(
-                engine,
-                log_handler=OptimizerParamsHandler(optimizer, param_name=param_name),
-                event_name=event,
-            ),
-        )
+        """Collect scalar values per `event` into `self.history`.
+
+        `output_transform(engine.state.output)` must return a flat dict
+        `{name: float}`. Each value is appended to `history[name]`.
+        """
+
+        def _collect(engine):
+            for name, value in output_transform(engine.state.output).items():
+                self._history.setdefault(name, []).append(float(value))
+
+        return self.with_handler(event, _collect)
+
+    @property
+    def history(self) -> dict[str, list[float]]:
+        """Scalars collected via `.with_history(...)`."""
+        return self._history
 
     def build(self) -> Engine:
         """Build and return the configured engine."""

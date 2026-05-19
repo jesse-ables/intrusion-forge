@@ -1,4 +1,5 @@
 # @package classifier
+kind: ml
 name: naive_bayes
 params:
   var_smoothing: 1e-9

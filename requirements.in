@@ -7,14 +7,12 @@ rich
 matplotlib
 hydra-core
 pyarrow
-tensorboard
 seaborn
 hdbscan
 xgboost
 joblib
 pytorch-ignite
 tqdm
-tensorboard
 umap-learn
 streamlit
 plotly

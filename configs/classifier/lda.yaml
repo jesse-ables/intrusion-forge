@@ -1,4 +1,5 @@
 # @package classifier
+kind: ml
 name: lda
 params:
   solver: svd
