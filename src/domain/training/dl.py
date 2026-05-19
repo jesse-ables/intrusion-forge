@@ -54,9 +54,7 @@ def _build_trainer(model, loss_fn, optimizer, scheduler, device, max_grad_norm):
     return builder.build(), builder.history
 
 
-def _build_validator(
-    model, loss_fn, device, trainer, patience, min_delta, models_path
-):
+def _build_validator(model, loss_fn, device, trainer, patience, min_delta, models_path):
     """Validator engine with early stopping + best-loss checkpointing."""
     return (
         EngineBuilder(eval_step)
@@ -130,7 +128,7 @@ def fit_classifier(
     )
 
     optimizer = create_optimizer(
-        optimizer_cfg.name, optimizer_cfg.params, model, loss_fn
+        optimizer_cfg.name, optimizer_cfg.params, model, loss_fn=loss_fn
     )
     scheduler = create_scheduler(
         scheduler_cfg.name, scheduler_cfg.params, optimizer, train_loader
@@ -202,7 +200,7 @@ def predict_with_proba(
     inputs = df_to_tensors(
         X,
         [num_cols, cat_cols],
-        [torch.float32, torch.long],
+        dtypes=[torch.float32, torch.long],
     )
     output = run_model(model, inputs, device)
     probs = F.softmax(output["logits"].cpu(), dim=1)
@@ -232,7 +230,7 @@ def load_model(path: Path, *, context: dict | None = None) -> nn.Module:
     if context is None:
         raise ValueError("DL load_model requires `context` with `device`.")
     device = context["device"]
-    ckpt = torch.load(Path(path) / "model.pt", map_location="cpu")
+    ckpt = torch.load(Path(path) / "model.pt", map_location="cpu", weights_only=True)
     model = _create_model(ckpt["name"], ckpt["params"], device)
     model.load_state_dict(ckpt["state_dict"])
     return model

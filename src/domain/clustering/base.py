@@ -43,7 +43,6 @@ def _score_silhouette(
         return float("-inf")
 
 
-
 @timed
 def grid_search(
     X_num: np.ndarray,
@@ -82,7 +81,7 @@ def grid_search(
     ):
         combo = dict(zip(keys, combo_values))
         try:
-            labels = fit_fn(sub_num, sub_cat, **combo, **fixed_params)
+            labels = fit_fn(sub_num, X_cat=sub_cat, **combo, **fixed_params)
         except Exception:
             continue
 

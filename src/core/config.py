@@ -53,3 +53,8 @@ def save_config(cfg: DictConfig, path: str | Path) -> None:
         OmegaConf.to_container(cfg, resolve=True),
         path,
     )
+
+
+def to_container(cfg) -> dict:
+    """Convert an OmegaConf config (or sub-node) to plain Python types."""
+    return OmegaConf.to_container(cfg, resolve=True)

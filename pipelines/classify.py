@@ -16,7 +16,7 @@ from sklearn.metrics import (
     accuracy_score,
 )
 
-from src.core.config import load_config, save_config
+from src.core.config import load_config, save_config, to_container
 from src.core.log import (
     FilesystemFigureSubscriber,
     JSONSubscriber,
@@ -65,7 +65,12 @@ def _load_data(
         ],
     )
     if data.n_samples is not None:
-        train_df = subsample_df(train_df, data.n_samples, random_state, data.label_col)
+        train_df = subsample_df(
+            train_df,
+            data.n_samples,
+            random_state=random_state,
+            label_col=data.label_col,
+        )
     return train_df, val_df, test_df
 
 
@@ -236,7 +241,9 @@ def _training_history_figures(history: dict[str, list[float]]) -> dict[str, Plot
     """One line plot per scalar in the per-step DL training history."""
     return {
         f"figure/training/{name}_curve": line_plot(
-            {name: values}, y_label=name, show_legend=False,
+            {name: values},
+            y_label=name,
+            show_legend=False,
         )
         for name, values in history.items()
         if values
@@ -363,7 +370,7 @@ def _train_stage(
         model,
         paths.models,
         name=cfg.classifier.name,
-        params=dict(cfg.classifier.params),
+        params=to_container(cfg.classifier.params),
     )
     logger.info("Model saved under %s", paths.models)
 
@@ -451,7 +458,8 @@ def classify(cfg) -> None:
     stage = cfg.stage
     if stage not in ("all", "training", "testing"):
         logger.error(
-            "Unknown stage: %r. Valid: 'all', 'training', 'testing'.", stage,
+            "Unknown stage: %r. Valid: 'all', 'training', 'testing'.",
+            stage,
         )
         sys.exit(1)
 

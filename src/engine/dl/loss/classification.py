@@ -29,7 +29,7 @@ class CrossEntropyLoss(BaseLoss):
         class_weight: Tensor | list[float] | None = None,
         device: torch.device = torch.device("cpu"),
     ) -> None:
-        super().__init__(reduction)
+        super().__init__(reduction=reduction)
         if not (0.0 <= label_smoothing < 1.0):
             raise ValueError("label_smoothing must be in [0, 1)")
         self.ignore_index = ignore_index
@@ -66,7 +66,7 @@ class FocalLoss(BaseLoss):
         label_smoothing: float = 0.0,
         device: torch.device = torch.device("cpu"),
     ) -> None:
-        super().__init__(reduction)
+        super().__init__(reduction=reduction)
         if gamma < 0:
             raise ValueError(f"gamma must be >= 0, got {gamma}")
         if not (0.0 <= label_smoothing < 1.0):

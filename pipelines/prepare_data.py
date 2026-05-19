@@ -89,7 +89,7 @@ def _cluster_per_class(
 
         raw_labels = fit_hdbscan(
             X_fit_cls,
-            None,
+            X_cat=None,
             max_fit_samples=max_fit_samples,
             random_state=random_state,
             penalize=False,
@@ -144,7 +144,7 @@ def preprocess_df(
         len(cat_cols),
     )
     df = drop_nans(df, num_cols + cat_cols + [label_col])
-    df = query_filter(df, filter_query)
+    df = query_filter(df, query=filter_query)
     df = rare_category_filter(df, [label_col], min_count=min_cat_count)
 
     train_df, val_df, test_df = ml_split(
@@ -155,7 +155,7 @@ def preprocess_df(
         random_state=random_state,
         label_col=label_col,
     )
-    train_df = random_undersample_df(train_df, label_col, random_state)
+    train_df = random_undersample_df(train_df, label_col, random_state=random_state)
     logger.info(
         "Split sizes — train: %d, val: %d, test: %d",
         len(train_df),
@@ -282,7 +282,7 @@ def prepare(cfg):
         num_cols,
         cat_cols,
         cfg.data.benign_tag,
-        label_mapping,
+        label_mapping=label_mapping,
     )
     dispatcher.publish(LogBundle.from_dict({"json/df_meta": metadata}))
 
