@@ -1,9 +1,8 @@
 # @package classifier
 kind: ml
-name: logistic_regression
+name: linear_svc
 params:
-  max_iter: 500
+  max_iter: 2000
   random_state: 42
 grid:
   C: [0.01, 0.1, 1.0, 10.0]
-  penalty: [l2]

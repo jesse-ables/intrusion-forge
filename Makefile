@@ -21,10 +21,10 @@
 PYTHON    ?= $(if $(wildcard venv/bin/python),venv/bin/python,python)
 STREAMLIT ?= $(if $(wildcard venv/bin/streamlit),venv/bin/streamlit,streamlit)
 DATA       ?= cic_2018_v2
-NAME       ?= exp
+NAME       ?= exp_euc
 SEED       ?= 42
 CLASSIFIER ?= tabular
-DISTANCE   ?= cosine
+DISTANCE   ?= euclidean
 FORCE      ?=
 
 ML_CLASSIFIERS := \
