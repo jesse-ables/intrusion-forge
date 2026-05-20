@@ -35,7 +35,7 @@ ML_CLASSIFIERS := \
     decision_tree \
     random_forest \
     hist_gradient_boosting \
-    svm_rbf \
+    linear_svc \
     xgboost
 
 DL_CLASSIFIERS_MIXED     := tabular
