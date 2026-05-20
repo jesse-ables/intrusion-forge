@@ -16,22 +16,19 @@ from src.core.log import (
 )
 from src.core.paths import OutputPaths
 from src.core.utils import flush_timing, load_from_json, timed
-import matplotlib.pyplot as plt
-
 from src.domain.plot.charts import (
     bar_plot,
     heatmap_plot,
     ridgeline_plot,
-    strip_plot,
+    strip_count_panel_plot,
     violin_plot,
 )
 from src.domain.plot.metrics import confusion_matrix_plot, roc_plot
-from src.domain.plot.base import Plot, _fig_to_plot
+from src.domain.plot.base import Plot
 from src.domain.plot.style import (
     CORRECT_COLOR,
     FAILED_COLOR,
     HIGHLIGHT_COLOR,
-    MUTED_COLOR,
     PALETTE,
     apply_plot_style,
 )
@@ -39,88 +36,6 @@ from src.domain.plot.style import (
 setup_logger(log_file="resources/logs.txt")
 apply_plot_style()
 logger = logging.getLogger(__name__)
-
-
-def _strip_with_count_panel(
-    categories: np.ndarray,
-    values: np.ndarray,
-    category_order: list[str],
-    counts_by_class: dict[str, int],
-    fill_values: np.ndarray,
-    fill_categorical_colors: tuple[str, ...],
-    x_label: str,
-    marker_values: np.ndarray | None = None,
-    marker_shapes: tuple[str, ...] = ("o", "X"),
-    failed_counts_by_class: dict[str, int] | None = None,
-) -> Plot:
-    """Strip plot on the left, horizontal count bar on the right (shared y-axis).
-
-    When `failed_counts_by_class` is provided, the count bar is overlaid by a
-    red segment per class with length equal to the number of clusters of that
-    class whose failure_rate > 0.
-    """
-    n_cats = len(category_order)
-    height = max(3.0, 0.35 * n_cats + 1.5)
-    fig, (ax_left, ax_right) = plt.subplots(
-        1,
-        2,
-        gridspec_kw={"width_ratios": [3.5, 1.0], "wspace": 0.04},
-        figsize=(11, height),
-        sharey=True,
-    )
-
-    strip_plot(
-        categories=categories,
-        values=values,
-        fill_values=fill_values,
-        fill_categorical_colors=fill_categorical_colors,
-        marker_values=marker_values,
-        marker_shapes=marker_shapes,
-        category_order=category_order,
-        orientation="h",
-        show_median=True,
-        x_label=x_label,
-        y_label="Class",
-        ax=ax_left,
-    )
-
-    counts = [int(counts_by_class.get(cat, 0)) for cat in category_order]
-    y_positions = np.arange(n_cats)
-    ax_right.barh(
-        y_positions,
-        counts,
-        color=MUTED_COLOR,
-        alpha=0.55,
-        edgecolor="white",
-        linewidth=0.5,
-    )
-    if failed_counts_by_class is not None:
-        failed_counts = [
-            int(failed_counts_by_class.get(cat, 0)) for cat in category_order
-        ]
-        if any(failed_counts):
-            ax_right.barh(
-                y_positions,
-                failed_counts,
-                color=HIGHLIGHT_COLOR,
-                alpha=0.85,
-                edgecolor="white",
-                linewidth=0.5,
-            )
-        ax_right.axvline(0, color="black", linewidth=1.0, zorder=5)
-    ax_right.set_xlabel("n clusters")
-    ax_right.tick_params(axis="y", left=False, labelleft=False)
-    ax_right.spines["left"].set_visible(False)
-    ax_right.grid(True, axis="x", alpha=0.15, linewidth=0.5)
-    ax_right.grid(False, axis="y")
-    if counts:
-        max_count = max(counts) or 1
-        offset = max_count * 0.02
-        for y, c in zip(y_positions, counts):
-            ax_right.text(c + offset, y, str(c), va="center", ha="left", fontsize=9)
-        ax_right.set_xlim(0, max_count * 1.18)
-
-    return _fig_to_plot(fig)
 
 
 def _plot_failure_strips(
@@ -143,7 +58,7 @@ def _plot_failure_strips(
     monochrome_fill = np.zeros(len(classes), dtype=float)
 
     return {
-        "summary/failure_rate_strip_box": _strip_with_count_panel(
+        "summary/failure_rate_strip_box": strip_count_panel_plot(
             categories=classes,
             values=failure_rate,
             category_order=class_order,
@@ -153,7 +68,7 @@ def _plot_failure_strips(
             fill_categorical_colors=(PALETTE[0],),
             x_label="Failure rate",
         ),
-        "summary/rf_prediction_strip_box": _strip_with_count_panel(
+        "summary/rf_prediction_strip_box": strip_count_panel_plot(
             categories=classes,
             values=failure_rate,
             category_order=class_order,

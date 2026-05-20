@@ -36,14 +36,23 @@ def bar_plot(
     y_label: str = "",
     title: str = "",
     ylim: tuple[float, float] | None = None,
+    xlim: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
     ax: Axes | None = None,
+    bar_positions: np.ndarray | None = None,
+    bar_alpha: float = 1.0,
+    axvline: float | None = None,
+    axvline_color: str = "black",
+    hide_yticks: bool = False,
+    hide_left_spine: bool = False,
 ) -> Plot | None:
     """Bar chart with optional sorting, top-k filtering, and value annotations.
 
     `color` may be a single color (applied to all bars), a list of per-bar
     colors, or None (defaults to PALETTE[0]). `color_gradient=True` is
     ignored when `color` is a list.
+    `bar_positions`: explicit numeric positions for `barh` — use when the
+    y-axis is shared with another panel (e.g. `sharey=True`).
     """
     if orientation not in ("h", "v"):
         raise ValueError("`orientation` must be 'h' or 'v'.")
@@ -85,8 +94,9 @@ def bar_plot(
 
     ax, fig = _ensure_ax(ax, figsize)
 
+    positions = bar_positions if bar_positions is not None else plot_labels
     draw = ax.barh if orientation == "h" else ax.bar
-    draw(plot_labels, plot_values, color=bar_color, edgecolor="white", linewidth=0.5)
+    draw(positions, plot_values, color=bar_color, alpha=bar_alpha, edgecolor="white", linewidth=0.5)
 
     if orientation == "h":
         ax.set_xlabel(x_label or "Value")
@@ -107,15 +117,24 @@ def bar_plot(
         offset = max(value_range * 0.01, 1e-6)
         for i, v in enumerate(plot_values):
             text = value_format.format(v)
+            pos = float(bar_positions[i]) if bar_positions is not None else i
             if orientation == "h":
-                ax.text(v + offset, i, text, va="center", ha="left")
+                ax.text(v + offset, pos, text, va="center", ha="left")
             else:
-                ax.text(i, v + offset, text, ha="center", va="bottom")
+                ax.text(pos, v + offset, text, ha="center", va="bottom")
 
     if ylim is not None:
         ax.set_ylim(ylim)
+    if xlim is not None:
+        ax.set_xlim(xlim)
     if title:
         ax.set_title(title)
+    if axvline is not None:
+        ax.axvline(axvline, color=axvline_color, linewidth=1.0, zorder=5)
+    if hide_yticks:
+        ax.tick_params(axis="y", left=False, labelleft=False)
+    if hide_left_spine:
+        ax.spines["left"].set_visible(False)
 
     return _finalize(fig)
 
@@ -365,6 +384,93 @@ def strip_plot(
 
     _apply_labels(ax, x_label, y_label, title)
     return _finalize(fig)
+
+
+def strip_count_panel_plot(
+    categories: np.ndarray,
+    values: np.ndarray,
+    category_order: list[str],
+    counts_by_class: dict[str, int],
+    fill_values: np.ndarray,
+    fill_categorical_colors: tuple[str, ...],
+    x_label: str,
+    *,
+    marker_values: np.ndarray | None = None,
+    marker_shapes: tuple[str, ...] = ("o", "X"),
+    failed_counts_by_class: dict[str, int] | None = None,
+) -> Plot:
+    """Strip plot (left) + horizontal count bar (right) sharing the y-axis.
+
+    When `failed_counts_by_class` is provided, a red overlay bar per class
+    shows how many clusters have failure_rate > 0, and a vertical reference
+    line is drawn at x=0.
+    """
+    n_cats = len(category_order)
+    height = max(3.0, 0.35 * n_cats + 1.5)
+    fig, (ax_left, ax_right) = plt.subplots(
+        1,
+        2,
+        gridspec_kw={"width_ratios": [3.5, 1.0], "wspace": 0.04},
+        figsize=(11, height),
+        sharey=True,
+    )
+
+    strip_plot(
+        categories=categories,
+        values=values,
+        fill_values=fill_values,
+        fill_categorical_colors=fill_categorical_colors,
+        marker_values=marker_values,
+        marker_shapes=marker_shapes,
+        category_order=category_order,
+        orientation="h",
+        show_median=True,
+        x_label=x_label,
+        y_label="Class",
+        ax=ax_left,
+    )
+
+    counts = [int(counts_by_class.get(cat, 0)) for cat in category_order]
+    y_positions = np.arange(n_cats)
+    max_count = max(counts) if counts else 1
+
+    bar_plot(
+        labels=list(category_order),
+        values=counts,
+        orientation="h",
+        sort=None,
+        bar_positions=y_positions,
+        bar_alpha=0.55,
+        color=MUTED_COLOR,
+        annotate_values=True,
+        value_format="{:.0f}",
+        x_label="n clusters",
+        hide_yticks=True,
+        hide_left_spine=True,
+        xlim=(0, max_count * 1.18),
+        axvline=0 if failed_counts_by_class is not None else None,
+        ax=ax_right,
+    )
+
+    if failed_counts_by_class is not None:
+        failed_counts = [int(failed_counts_by_class.get(cat, 0)) for cat in category_order]
+        if any(failed_counts):
+            bar_plot(
+                labels=list(category_order),
+                values=failed_counts,
+                orientation="h",
+                sort=None,
+                bar_positions=y_positions,
+                bar_alpha=0.85,
+                color=HIGHLIGHT_COLOR,
+                annotate_values=False,
+                x_label="n clusters",
+                hide_yticks=True,
+                hide_left_spine=True,
+                ax=ax_right,
+            )
+
+    return _fig_to_plot(fig)
 
 
 def scatter_plot(
