@@ -18,6 +18,7 @@ grid_search:
   enabled: true
   scoring: f1_macro
   cv: 5
+  max_samples: 50000
 
 prepare:
   force: false                       # re-run preprocessing+clustering even if shared outputs exist

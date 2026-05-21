@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import tempfile
+
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
 
 from src.core.utils import load_from_joblib, save_to_joblib
@@ -53,26 +55,57 @@ def grid_search_classifier(
     scoring: str = "f1_macro",
     cv: int = 5,
     n_jobs: int = -1,
+    max_samples: int | None = None,
     context: dict | None = None,
 ) -> tuple[Pipeline, dict]:
     """Cross-validated grid search over the classifier step of the pipeline.
 
     Grid keys (e.g. ``n_estimators``) are remapped to ``clf__<key>`` to target
     the classifier inside the Pipeline. Returns ``(best_pipeline, summary)``.
+
+    Two optimisations are applied automatically:
+
+    * **Preprocessing cache**: the pipeline's transform steps are cached across
+      parameter combinations so that each CV fold preprocesses the data only
+      once regardless of how many classifier configurations are tried.
+    * **Stratified subsampling** (``max_samples``): when set and
+      ``len(X) > max_samples``, a stratified random sample is used for the CV
+      search; the winning configuration is then refit on the full dataset.
     """
     num_cols, cat_cols = _check_context(context)
-    base = build_pipeline(name, params, num_cols, cat_cols)
     clf_grid = {f"clf__{k}": v for k, v in grid.items()}
 
-    search = GridSearchCV(
-        base,
-        param_grid=clf_grid,
-        scoring=scoring,
-        cv=cv,
-        n_jobs=n_jobs,
-        refit=True,
-    )
-    search.fit(X, y)
+    subsampled = max_samples is not None and len(X) > max_samples
+    if subsampled:
+        _, X_search, _, y_search = train_test_split(
+            X, y, test_size=max_samples, stratify=y, random_state=42
+        )
+    else:
+        X_search, y_search = X, y
+
+    with tempfile.TemporaryDirectory() as cache_dir:
+        base = build_pipeline(name, params, num_cols, cat_cols)
+        base.memory = cache_dir
+        search = GridSearchCV(
+            base,
+            param_grid=clf_grid,
+            scoring=scoring,
+            cv=cv,
+            n_jobs=n_jobs,
+            refit=not subsampled,
+        )
+        search.fit(X_search, y_search)
+
+    if subsampled:
+        best_clf_params = {
+            k.replace("clf__", "", 1): v for k, v in search.best_params_.items()
+        }
+        best_pipeline = build_pipeline(
+            name, {**params, **best_clf_params}, num_cols, cat_cols
+        )
+        best_pipeline.fit(X, y)
+    else:
+        best_pipeline = search.best_estimator_
 
     cv_results = [
         {
@@ -95,7 +128,7 @@ def grid_search_classifier(
         "cv": cv,
         "cv_results": cv_results,
     }
-    return search.best_estimator_, summary
+    return best_pipeline, summary
 
 
 def predict_with_proba(

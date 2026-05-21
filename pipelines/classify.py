@@ -306,9 +306,7 @@ def _prepare_train_payload(
     return df, None
 
 
-def _build_ml_context(
-    num_cols: list[str], cat_cols: list[str]
-) -> dict:
+def _build_ml_context(num_cols: list[str], cat_cols: list[str]) -> dict:
     """Pack the column groups needed by ML preprocessing pipeline."""
     return {"num_cols": num_cols, "cat_cols": cat_cols}
 
@@ -355,6 +353,7 @@ def _train_stage(
             scoring=cfg.grid_search.scoring,
             cv=cfg.grid_search.cv,
             context=context,
+            max_samples=cfg.grid_search.max_samples,
         )
         logger.info(
             "Best params: %s | Best score (%s): %.4f",
