@@ -28,8 +28,6 @@ cat_cols:
   - day_of_week
   - poutcome
 
-num_numerical: 10
-num_categorical: 10
 benign_tag: "no"
 
 train_frac: 0.8

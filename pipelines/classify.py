@@ -16,7 +16,7 @@ from sklearn.metrics import (
     accuracy_score,
 )
 
-from src.core.config import load_config, save_config, to_container
+from src.core.config import load_config, save_config
 from src.core.log import (
     FilesystemFigureSubscriber,
     JSONSubscriber,
@@ -311,6 +311,29 @@ def _build_ml_context(num_cols: list[str], cat_cols: list[str]) -> dict:
     return {"num_cols": num_cols, "cat_cols": cat_cols}
 
 
+def _resolve_dl_params(
+    name: str,
+    params: dict,
+    num_cols: list[str],
+    cat_cols: list[str],
+) -> dict:
+    """Inject input-shape params into a DL classifier's `params` from column counts.
+
+    Keeps `configs/classifier/*.yaml` free of `${data.num_*}` interpolation; the
+    counts are derived from `num_cols` / `cat_cols` at fit time and persisted in
+    the checkpoint by `save_model`, so `load_model` works unchanged.
+    """
+    out = dict(params)
+    if name == "numerical":
+        out["in_features"] = len(num_cols)
+    elif name == "categorical":
+        out["num_features"] = len(cat_cols)
+    elif name == "tabular":
+        out["num_numerical_features"] = len(num_cols)
+        out["num_categorical_features"] = len(cat_cols)
+    return out
+
+
 @timed
 def _train_stage(
     cfg,
@@ -336,6 +359,10 @@ def _train_stage(
     X, y = _prepare_train_payload(kind, train_df, feat_cols, label_col)
     X_val, y_val = _prepare_train_payload(kind, val_df, feat_cols, label_col)
 
+    params = dict(cfg.classifier.params)
+    if kind == "dl":
+        params = _resolve_dl_params(cfg.classifier.name, params, num_cols, cat_cols)
+
     has_grid = "grid" in cfg.classifier and len(cfg.classifier.grid) > 0
     if cfg.grid_search.enabled and has_grid:
         logger.info(
@@ -346,7 +373,7 @@ def _train_stage(
         )
         model, summary = training_mod.grid_search_classifier(
             name=cfg.classifier.name,
-            params=dict(cfg.classifier.params),
+            params=params,
             grid=dict(cfg.classifier.grid),
             X=X,
             y=y,
@@ -366,7 +393,7 @@ def _train_stage(
         logger.info("Training %s ...", cfg.classifier.name)
         model, fit_summary = training_mod.fit_classifier(
             name=cfg.classifier.name,
-            params=dict(cfg.classifier.params),
+            params=params,
             X=X,
             y=y,
             X_val=X_val,
@@ -381,7 +408,7 @@ def _train_stage(
         model,
         paths.models,
         name=cfg.classifier.name,
-        params=to_container(cfg.classifier.params),
+        params=params,
     )
     logger.info("Model saved under %s", paths.models)
 

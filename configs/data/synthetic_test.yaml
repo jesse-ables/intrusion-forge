@@ -30,8 +30,6 @@ cat_cols:
   - cat_1
   - cat_2
 
-num_numerical: 20
-num_categorical: 2
 benign_tag: class_1
 
 train_frac: 0.8

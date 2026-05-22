@@ -2,8 +2,6 @@
 kind: dl
 name: tabular
 params:
-  num_numerical_features: ${data.num_numerical}
-  num_categorical_features: ${data.num_categorical}
   max_emb_dim: 384
   hidden_dims: [128, 64, 32, 16]
   dropout: 0.1

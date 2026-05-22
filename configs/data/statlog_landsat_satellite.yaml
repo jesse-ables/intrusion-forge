@@ -54,9 +54,6 @@ num_cols:
 
 cat_cols: []
 
-num_numerical: 36
-num_categorical: 0
-
 train_frac: 0.8
 val_frac: 0.1
 test_frac: 0.1

@@ -29,8 +29,6 @@ num_cols:
 
 cat_cols: []
 
-num_numerical: 21
-num_categorical: 0
 benign_tag: "normal"
 
 train_frac: 0.8

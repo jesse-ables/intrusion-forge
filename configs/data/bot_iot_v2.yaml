@@ -45,8 +45,6 @@ cat_cols:
   - DNS_QUERY_TYPE
   - FTP_COMMAND_RET_CODE
 
-num_numerical: 29
-num_categorical: 8
 benign_tag: Benign
 
 train_frac: 0.8

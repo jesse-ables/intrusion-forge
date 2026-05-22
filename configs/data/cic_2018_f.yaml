@@ -90,8 +90,6 @@ cat_cols:
     - ICMP Code
     - ICMP Type
 
-num_numerical: 89
-num_categorical: 3
 benign_tag: BENIGN
 
 train_frac: 0.8
