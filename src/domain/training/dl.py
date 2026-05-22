@@ -111,13 +111,10 @@ def fit_classifier(
     loops_cfg = context["loops_cfg"]
     models_path = Path(context["models_path"])
 
-    model_params = dict(params)
-    model_params.setdefault("num_classes", df_meta["num_classes"])
-
     loss_params = dict(loss_cfg.params)
     loss_params.setdefault("class_weight", df_meta["class_weights"])
 
-    model = _create_model(name, model_params, device)
+    model = _create_model(name, params, device)
     loss_fn = create_loss(loss_cfg.name, loss_params, device)
 
     train_loader = _make_loader(

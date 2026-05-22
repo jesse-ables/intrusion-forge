@@ -317,14 +317,17 @@ def _resolve_dl_params(
     params: dict,
     num_cols: list[str],
     cat_cols: list[str],
+    num_classes: int,
 ) -> dict:
-    """Inject input-shape params into a DL classifier's `params` from column counts.
+    """Inject fit-time params into a DL classifier's `params` from data shape.
 
     Keeps `configs/classifier/*.yaml` free of `${data.num_*}` interpolation; the
-    counts are derived from `num_cols` / `cat_cols` at fit time and persisted in
-    the checkpoint by `save_model`, so `load_model` works unchanged.
+    values are derived from `num_cols` / `cat_cols` / `num_classes` at fit time
+    and persisted in the checkpoint by `save_model`, so `load_model` works
+    unchanged.
     """
     out = dict(params)
+    out["num_classes"] = num_classes
     if name == "numerical":
         out["in_features"] = len(num_cols)
     elif name == "categorical":
@@ -362,7 +365,13 @@ def _train_stage(
 
     params = OmegaConf.to_container(cfg.classifier.params, resolve=True)
     if kind == "dl":
-        params = _resolve_dl_params(cfg.classifier.name, params, num_cols, cat_cols)
+        params = _resolve_dl_params(
+            cfg.classifier.name,
+            params,
+            num_cols,
+            cat_cols,
+            df_meta["num_classes"],
+        )
 
     has_grid = "grid" in cfg.classifier and len(cfg.classifier.grid) > 0
     if cfg.grid_search.enabled and has_grid:
