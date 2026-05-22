@@ -8,6 +8,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 import torch
+from omegaconf import OmegaConf
 from sklearn.metrics import (
     confusion_matrix,
     f1_score,
@@ -359,7 +360,7 @@ def _train_stage(
     X, y = _prepare_train_payload(kind, train_df, feat_cols, label_col)
     X_val, y_val = _prepare_train_payload(kind, val_df, feat_cols, label_col)
 
-    params = dict(cfg.classifier.params)
+    params = OmegaConf.to_container(cfg.classifier.params, resolve=True)
     if kind == "dl":
         params = _resolve_dl_params(cfg.classifier.name, params, num_cols, cat_cols)
 
