@@ -1,0 +1,2 @@
+n_components: [2, 4, 8, 16]
+covariance_type: full

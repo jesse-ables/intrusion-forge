@@ -1,0 +1,4 @@
+min_cluster_size: [30, 50, 100, 150]
+min_samples: [30, 50, 75, 100, 150]
+pca_variance: [0.8]
+max_fit_samples: [50000]

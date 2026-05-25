@@ -1,0 +1,2 @@
+algorithms: [gmm, kmeans]
+consensus_threshold: 0.5

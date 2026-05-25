@@ -3,11 +3,10 @@ import json
 import logging
 import math
 import pickle
+import joblib
 import time
 from pathlib import Path
 from typing import Iterable
-
-import joblib
 
 
 def _nan_to_none(obj: object) -> object:
