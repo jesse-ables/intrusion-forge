@@ -1,6 +1,6 @@
 import numpy as np
 import hdbscan
-from sklearn.cluster import KMeans
+from sklearn.cluster import Birch, KMeans
 from sklearn.mixture import GaussianMixture
 
 from src.domain.clustering import ClusteringFactory
@@ -79,6 +79,7 @@ def fit_kmeans(
     **_,
 ) -> np.ndarray:
     """Fit K-means on X and return labels (n,)."""
+    n_clusters = max(2, min(n_clusters, X_num.shape[0] - 1))
     X_num = np.ascontiguousarray(X_num, dtype=np.float64)
     model = KMeans(n_clusters=n_clusters, random_state=random_state)
     labels = model.fit_predict(X_num)
@@ -96,6 +97,7 @@ def fit_gmm(
     **_,
 ) -> np.ndarray:
     """Fit GMM on X and return predicted cluster labels (n,)."""
+    n_components = max(2, min(n_components, X_num.shape[0] - 1))
     X_num = np.ascontiguousarray(X_num, dtype=np.float64)
     model = GaussianMixture(
         n_components=n_components,
@@ -103,4 +105,33 @@ def fit_gmm(
         random_state=random_state,
     )
     labels = model.fit_predict(X_num)
+    return labels
+
+
+@ClusteringFactory.register("birch")
+def fit_birch(
+    X_num: np.ndarray,
+    *,
+    X_cat: np.ndarray | None = None,
+    threshold: float = 0.5,
+    branching_factor: int = 50,
+    max_fit_samples: int = 50_000,
+    random_state: int = 0,
+    **_,
+) -> np.ndarray:
+    """Fit BIRCH with variable k (n_clusters=None) and return labels (n,)."""
+    n = X_num.shape[0]
+    X_num = np.ascontiguousarray(X_num, dtype=np.float64)
+    clf = Birch(
+        threshold=threshold,
+        branching_factor=branching_factor,
+        n_clusters=None,
+    )
+    if n > max_fit_samples:
+        sub_num, _sub = _subsample(X_num, None, max_fit_samples, random_state)
+        clf.fit(sub_num)
+        labels = clf.predict(X_num)
+    else:
+        clf.fit(X_num)
+        labels = clf.labels_
     return labels
