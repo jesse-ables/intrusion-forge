@@ -30,6 +30,47 @@ cat_cols:
   - cat_1
   - cat_2
 
+complexity_cols:
+  - f1_min
+  - f1_mean
+  - f1_max
+  - f2_min
+  - f2_mean
+  - f2_max
+  - f3_min
+  - f3_mean
+  - f3_max
+  - f4_min
+  - f4_mean
+  - f4_max
+  - n1_min
+  - n1_mean
+  - n1_max
+  - n2_min
+  - n2_mean
+  - n2_max
+  - n3_min
+  - n3_mean
+  - n3_max
+  - n4_min
+  - n4_mean
+  - n4_max
+  - network_density_min
+  - network_density_mean
+  - network_density_max
+  - cls_coef
+  - hub
+  - t2
+  - t3
+  - t4
+  - max_dispersion
+  - p95_dispersion
+  - dist_to_nearest_centroid
+  - p5_silhouette
+  - frac_at_risk
+  - is_noise_cluster
+  #- cluster_class
+
 benign_tag: class_1
 
 train_frac: 0.8

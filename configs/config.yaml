@@ -9,7 +9,7 @@ defaults:
   - path: default
 
 seed: 42
-name: exp
+name: exp_euc
 device: cpu
 stage: all
 n_samples: null
@@ -53,6 +53,11 @@ plots:
   max_class_pairs: 10
   projection_max_samples: 5000
   pair_projection_max_samples: 5000
+
+explain:
+  generate: true
+  num_samples: 100
+
 
 hydra:
   run:
