@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from src.core.config import load_config, save_config
@@ -35,10 +36,7 @@ from src.domain.data.preprocessing import (
     random_undersample_df,
 )
 from src.domain.analysis.complexity.shared import _l2_normalize
-from src.domain.clustering import (
-    grid_search,
-    fit_hdbscan,
-)
+from src.domain.clustering import ClusterFn, build_cluster_fn
 
 setup_logger(log_file="resources/logs.txt")
 logger = logging.getLogger(__name__)
@@ -48,19 +46,14 @@ def _cluster_per_class(
     X_num: np.ndarray,
     y_class: np.ndarray,
     classes: list,
-    param_grid: dict,
-    max_fit_samples: int,
-    random_state: int,
-    cluster_selection_method: str = "leaf",
-    max_cluster_size: int | None = None,
+    cluster_fn: ClusterFn,
     metric: str = "euclidean",
 ) -> tuple[np.ndarray, dict[int, np.ndarray], set[int]]:
-    """Per-class grid search + HDBSCAN fit. Returns (labels, centroids, noise_cluster_ids).
+    """Per-class clustering. Returns (labels, centroids, noise_cluster_ids).
 
-    For each class: grid_search finds best (min_cluster_size, min_samples),
-    then fit_hdbscan assigns labels. Cluster IDs are globally unique via offset.
-    Noise points (-1) are reassigned to per-class pseudo-clusters; their IDs are
-    collected in noise_cluster_ids so downstream code can flag them.
+    Cluster IDs are globally unique via offset. Residual -1 noise points (single
+    HDBSCAN runs only — ensemble output never has -1) are reassigned to per-class
+    pseudo-clusters; their IDs are collected in noise_cluster_ids.
     """
     n = X_num.shape[0]
     labels = np.full(n, -1, dtype=np.int64)
@@ -74,29 +67,7 @@ def _cluster_per_class(
         X_num_cls = X_num[mask]
         X_fit_cls = _l2_normalize(X_num_cls) if metric == "cosine" else X_num_cls
 
-        best_params = grid_search(
-            X_fit_cls,
-            None,
-            fit_hdbscan,
-            param_grid=param_grid,
-            max_fit_samples=max_fit_samples,
-            random_state=random_state,
-            penalize=False,
-            cluster_selection_method=cluster_selection_method,
-            max_cluster_size=max_cluster_size,
-        )
-        logger.info("Class %s — best params: %s", cls, best_params)
-
-        raw_labels = fit_hdbscan(
-            X_fit_cls,
-            X_cat=None,
-            max_fit_samples=max_fit_samples,
-            random_state=random_state,
-            penalize=False,
-            cluster_selection_method=cluster_selection_method,
-            max_cluster_size=max_cluster_size,
-            **best_params,
-        )
+        raw_labels = cluster_fn(X_fit_cls, None)
 
         cluster_ids = np.unique(raw_labels[raw_labels != -1])
         labels[mask] = np.where(raw_labels == -1, -1, raw_labels + offset)
@@ -230,20 +201,19 @@ def prepare(cfg):
     y_class = combined[label_col].to_numpy()
     all_classes = sorted(combined[label_col].unique().tolist())
 
-    logger.info("Running per-class grid search and clustering...")
-    param_grid = {
-        "min_cluster_size": list(cfg.clustering.min_cluster_sizes),
-        "min_samples": list(cfg.clustering.min_samples_list),
-    }
+    logger.info("Running per-class clustering...")
+    algorithms = OmegaConf.to_container(cfg.clustering.algorithms, resolve=True)
+    cluster_fn = build_cluster_fn(
+        algorithms=algorithms,
+        consensus_threshold=cfg.clustering.consensus_threshold,
+        max_fit_samples=cfg.clustering.max_fit_samples,
+        random_state=cfg.seed,
+    )
     labels, centroids, noise_cluster_ids = _cluster_per_class(
         X_num,
         y_class,
         all_classes,
-        param_grid=param_grid,
-        max_fit_samples=cfg.clustering.max_fit_samples,
-        random_state=cfg.seed,
-        cluster_selection_method=cfg.clustering.cluster_selection_method,
-        max_cluster_size=cfg.clustering.max_cluster_size,
+        cluster_fn=cluster_fn,
         metric=cfg.clustering.distance,
     )
     noise_count = (

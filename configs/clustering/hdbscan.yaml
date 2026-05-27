@@ -1,0 +1,10 @@
+distance: cosine
+max_fit_samples: 10000
+consensus_threshold: 0.5
+algorithms:
+  hdbscan:
+    min_cluster_size: [10, 30, 50]
+    min_samples: [5, 10, 30]
+    cluster_selection_method: leaf
+    max_cluster_size: null
+    penalize: false

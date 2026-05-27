@@ -81,6 +81,7 @@ class ExperimentRecord:
     recall_macro: float | None
     fc_f1: float | None
     fc_auc: float | None
+    fc_skipped: bool = False
 
     @property
     def key(self) -> str:
@@ -161,8 +162,8 @@ def _classifier_family(classifier_dir: Path) -> Literal["ml", "dl"]:
     return "ml"
 
 
-def _extract_headline_metrics(classifier_dir: Path) -> dict[str, float | None]:
-    """Read summary.json + classifier_results.json and return the seven heatmap metrics."""
+def _extract_headline_metrics(classifier_dir: Path) -> dict[str, float | bool | None]:
+    """Read summary.json + classifier_results.json and return the headline metrics."""
     summary = _read_json(classifier_dir / "outputs" / "testing" / "summary.json") or {}
     fc = _read_json(classifier_dir / "outputs" / "analysis" / "classifier_results.json") or {}
     return {
@@ -173,6 +174,7 @@ def _extract_headline_metrics(classifier_dir: Path) -> dict[str, float | None]:
         "recall_macro": _safe_float(summary.get("recall_macro")),
         "fc_f1": _safe_float(fc.get("f1_score")),
         "fc_auc": _safe_float(fc.get("roc_auc")),
+        "fc_skipped": bool(fc.get("skipped", False)),
     }
 
 
@@ -563,7 +565,15 @@ def panel_failure_classifier(
     st.markdown("**Failure classifier (RF on cluster complexity)**")
     fc = detail.classifier_results
     if fc is None:
-        st.caption("No `classifier_results.json` for this run.")
+        st.caption("⚠️ Not computed — run `make failure-classify` to generate.")
+        return
+    if fc.get("skipped"):
+        st.warning(
+            f"🚫 **Stage skipped** — {fc.get('message', fc.get('reason'))}\n\n"
+            f"Positives: {fc.get('n_positives', '?')} | "
+            f"Threshold: {fc.get('threshold', '?')} | "
+            f"Required: ≥{fc.get('min_required', 2)}"
+        )
         return
     cols = st.columns(3)
     cols[0].metric(
@@ -590,8 +600,14 @@ def panel_feature_importances(
 ) -> None:
     st.markdown("**Feature importances (failure classifier)**")
     fc = detail.classifier_results
-    if not fc or "feature_importances" not in fc:
-        st.caption("No feature_importances in classifier_results.json.")
+    if fc is None:
+        st.caption("⚠️ Not computed — run `make failure-classify` to generate.")
+        return
+    if fc.get("skipped"):
+        st.warning(f"🚫 Skipped — {fc.get('message', fc.get('reason'))}")
+        return
+    if "feature_importances" not in fc:
+        st.caption("Malformed `classifier_results.json` (no feature_importances).")
         return
     top_k = st.slider(
         "Top-K features", 5, 50, 20, key=_wkey(key_prefix, "fi_topk", record)

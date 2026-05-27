@@ -1,0 +1,6 @@
+distance: cosine
+max_fit_samples: 10000
+consensus_threshold: 0.5
+algorithms:
+  kmeans:
+    n_clusters: [2, 4, 8, 16, 32]

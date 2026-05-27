@@ -1,4 +1,5 @@
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -29,29 +30,42 @@ setup_logger(log_file="resources/logs.txt")
 logger = logging.getLogger(__name__)
 
 
+def _max_safe_splits(n_minority: int, n_splits_cfg: int) -> int:
+    """Largest k <= n_splits_cfg such that StratifiedKFold(k) won't degenerate."""
+    k = min(n_splits_cfg, n_minority)
+    return k if k >= 2 else 0
+
+
 def _run_outer_fold(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     X_test: pd.DataFrame,
     y_test: pd.Series,
-    inner_cv: StratifiedKFold,
+    inner_cv: StratifiedKFold | None,
     param_grid: dict,
     random_state: int,
 ) -> dict:
-    """Run one outer CV fold: fit GridSearchCV, predict, collect per-fold metrics."""
-    grid = GridSearchCV(
-        estimator=RandomForestClassifier(
+    """Run one outer CV fold. When inner_cv is None, skip GridSearchCV and use default RF."""
+    if inner_cv is None:
+        best = RandomForestClassifier(
             random_state=random_state,
             class_weight="balanced",
-        ),
-        param_grid=param_grid,
-        cv=inner_cv,
-        scoring="f1",
-        n_jobs=-1,
-        verbose=0,
-    )
-    grid.fit(X_train, y_train)
-    best = grid.best_estimator_
+        )
+        best.fit(X_train, y_train)
+    else:
+        grid = GridSearchCV(
+            estimator=RandomForestClassifier(
+                random_state=random_state,
+                class_weight="balanced",
+            ),
+            param_grid=param_grid,
+            cv=inner_cv,
+            scoring="f1",
+            n_jobs=-1,
+            verbose=0,
+        )
+        grid.fit(X_train, y_train)
+        best = grid.best_estimator_
 
     y_pred = best.predict(X_test)
     y_proba = best.predict_proba(X_test)[:, 1]
@@ -146,24 +160,52 @@ def fit_failure_classifier(
     y = df["failure_rate"].apply(lambda x: 1 if x > failure_threshold else 0)
 
     n_positives = int(y.sum())
-    actual_outer_splits = min(n_outer_splits, max(2, n_positives // 3))
-    n_train_positives = int(n_positives * (1 - 1 / actual_outer_splits))
-    actual_inner_splits = min(n_inner_splits, max(2, n_train_positives // 3))
-    if actual_outer_splits < n_outer_splits or actual_inner_splits < n_inner_splits:
+    n_negatives = int((1 - y).sum())
+    n_minority = min(n_positives, n_negatives)
+    outer_k = _max_safe_splits(n_minority, n_outer_splits)
+    if outer_k == 0:
+        message = (
+            f"Failure classifier skipped: only {n_minority} minority sample(s) "
+            f"(positives={n_positives}, threshold={failure_threshold}). "
+            f"Need >=2 for stratified CV."
+        )
+        logger.warning("[STAGE-SKIP] %s", message)
+        results = {
+            "skipped": True,
+            "reason": "insufficient_minority_samples",
+            "message": message,
+            "n_minority": n_minority,
+            "n_positives": n_positives,
+            "n_negatives": n_negatives,
+            "threshold": failure_threshold,
+            "min_required": 2,
+        }
+        if analysis_bus is not None:
+            analysis_bus.publish(
+                LogBundle.from_dict({"json/analysis/classifier_results": results})
+            )
+        return results
+
+    m_train_worst = n_minority - math.ceil(n_minority / outer_k)
+    inner_k = _max_safe_splits(m_train_worst, n_inner_splits)
+    if outer_k < n_outer_splits or inner_k < n_inner_splits:
         logger.warning(
-            "Adapting CV splits (only %d positive examples): outer %d→%d, inner %d→%d.",
-            n_positives,
+            "[CV-ADAPT] Adapting CV (minority=%d): outer %d→%d, inner %d→%d%s",
+            n_minority,
             n_outer_splits,
-            actual_outer_splits,
+            outer_k,
             n_inner_splits,
-            actual_inner_splits,
+            inner_k or 0,
+            " (no GridSearchCV — using RF defaults)" if inner_k == 0 else "",
         )
 
     outer_cv = StratifiedKFold(
-        n_splits=actual_outer_splits, shuffle=True, random_state=random_state
+        n_splits=outer_k, shuffle=True, random_state=random_state
     )
-    inner_cv = StratifiedKFold(
-        n_splits=actual_inner_splits, shuffle=True, random_state=random_state
+    inner_cv = (
+        StratifiedKFold(n_splits=inner_k, shuffle=True, random_state=random_state)
+        if inner_k > 0
+        else None
     )
 
     fold_f1s: list[float] = []
@@ -175,7 +217,7 @@ def fit_failure_classifier(
     oof_indices: list = []
 
     for train_idx, test_idx in tqdm(
-        outer_cv.split(X, y), total=actual_outer_splits, desc="Outer CV"
+        outer_cv.split(X, y), total=outer_k, desc="Outer CV"
     ):
         fold = _run_outer_fold(
             X.iloc[train_idx],

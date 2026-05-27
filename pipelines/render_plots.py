@@ -331,6 +331,17 @@ def assemble_analysis_figures(
         summary_df["cluster_class"].astype(str).map(label_mapping)
     )
 
+    if classifier_results.get("skipped"):
+        logger.warning(
+            "[STAGE-SKIP] Skipping failure-classifier plots: %s",
+            classifier_results.get("message", classifier_results.get("reason")),
+        )
+        figures: dict[str, Plot] = {}
+        figures.update(_plot_class_separability_ridgeline(summary_df))
+        if analysis_bus is not None:
+            analysis_bus.publish(LogBundle(figures=figures))
+        return figures
+
     oof_preds = classifier_results.get("oof_predictions", {})
     rf_correct = np.array(
         [oof_preds.get(str(cid), np.nan) for cid in summary_df.index], dtype=float

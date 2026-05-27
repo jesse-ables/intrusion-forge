@@ -8,6 +8,7 @@ from tqdm import tqdm
 from src.core.utils import timed
 
 FitFn = Callable[..., np.ndarray]  # (X_num, X_cat=None, **params) -> labels
+ClusterFn = Callable[[np.ndarray, np.ndarray | None], np.ndarray]  # (X_num, X_cat) -> labels
 
 
 def _subsample(

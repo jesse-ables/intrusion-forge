@@ -1,6 +1,7 @@
 defaults:
   - data: cic_2018_v2
   - classifier: tabular
+  - clustering: hdbscan
   - loss: focal             # consumed only by DL classifiers
   - optimizer: adamw        # consumed only by DL classifiers
   - scheduler: one_cycle    # consumed only by DL classifiers
@@ -30,14 +31,6 @@ complexity:
   min_subsample_per_cluster: 50      # minimum samples per cluster in proportional subsampling
   max_complexity_samples: 100000     # cap on points used to build the k-NN graph
   force: false                       # re-run complexity computation even if shared output exists
-
-clustering:
-  distance: cosine                   # euclidean | cosine — L2-normalises X_num before HDBSCAN fit when cosine
-  min_cluster_sizes: [10, 30, 50]
-  min_samples_list: [5, 10, 30]
-  cluster_selection_method: leaf     # leaf = fine-grained cohesive clusters; eom = larger merged clusters
-  max_cluster_size: null             # optional hard-cap on cluster size (null = disabled)
-  max_fit_samples: 10000
 
 failure_classifier:
   threshold: 0.0                     # cluster is "failed" when failure_rate > threshold

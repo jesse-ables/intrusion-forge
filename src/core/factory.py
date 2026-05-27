@@ -32,6 +32,16 @@ class Factory(Generic[T]):
     def __len__(self) -> int:
         return len(self._registry)
 
+    def get(self, name: str) -> Type[T]:
+        """Return the registered class/callable for name, without instantiation."""
+        cls = self._registry.get(name)
+        if cls is None:
+            raise ValueError(
+                f"Unknown {self._component_type_name}: {name!r}. "
+                f"Available: {sorted(self._registry)}"
+            )
+        return cls
+
     def create(self, class_name: str, params: dict | None = None) -> T:
         """Create an instance of a registered class."""
         cls = self._registry.get(class_name)
